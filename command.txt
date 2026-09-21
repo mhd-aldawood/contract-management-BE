@@ -1,0 +1,6 @@
+django-admin startproject <DIR_NAME>
+python manage.py startapp <APP_NAME>
+
+
+
+curl -X POST http://127.0.0.1:8000/api/auth/signup/ -H "Content-Type: application/json" -d '{"username":"alice","email":"alice@example.com","password":"secret123","password2":"secret123"}'
