@@ -23,7 +23,7 @@ class PaymentScheduleRowSerializer(serializers.ModelSerializer):
 
 class NafathCenterAgreementSerializer(serializers.ModelSerializer):
     # ---- nested rows: wire key "paymentSchedule" → model attr "payment_schedule"
-    payment_schedule  = PaymentScheduleRowSerializer(
+    paymentSchedule  = PaymentScheduleRowSerializer(
         many=True,
         required=False,
         allow_null=True,
@@ -47,7 +47,7 @@ class NafathCenterAgreementSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'type', 'agreementNumber', 'name', 'companyName', 'subject',
              'estimatedCost', 'startDate', 'endDate',
-            'paymentMethod', 'paymentText', 'payment_schedule',
+            'paymentMethod', 'paymentText', 'paymentSchedule',
             'status', 'disbursement', 'budgetType',
             'isHidden', 'fileName', 'file',
         ]
@@ -64,19 +64,12 @@ class NafathCenterAgreementSerializer(serializers.ModelSerializer):
             data = data.dict()
         print('>>> after .dict():', data)
 
-        # 2. Remap camelCase wire key -> snake_case serializer field
-        if 'paymentSchedule' in data:
-            data['payment_schedule'] = data.pop('paymentSchedule')
-            print('>>> remapped paymentSchedule -> payment_schedule')
-        else:
-            print('>>> NO paymentSchedule KEY FOUND')
-
         # 3. If the client sent the list as a JSON string, decode it
-        raw = data.get('payment_schedule')
+        raw = data.get('paymentSchedule')
         if isinstance(raw, str):
             try:
-                data['payment_schedule'] = json.loads(raw)
-                print('>>> decoded JSON string ->', data['payment_schedule'])
+                data['paymentSchedule'] = json.loads(raw)
+                print('>>> decoded JSON string ->', data['paymentSchedule'])
             except Exception as e:
                 print('>>> json.loads failed:', e)
 
@@ -88,15 +81,15 @@ class NafathCenterAgreementSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         print('VALIDATED KEYS:', list(validated_data.keys()))  # ← add this
-        print('ROWS RECEIVED:', validated_data.get('payment_schedule'))
+        print('ROWS RECEIVED:', validated_data.get('paymentSchedule'))
 
-        rows = validated_data.pop('payment_schedule', None) or []
+        rows = validated_data.pop('paymentSchedule', None) or []
         agreement = NafathCenterAgreement.objects.create(**validated_data)
         self._save_rows(agreement, rows)
         return agreement
 
     def update(self, instance, validated_data):
-        rows = validated_data.pop('payment_schedule', None)
+        rows = validated_data.pop('paymentSchedule', None)
         instance = super().update(instance, validated_data)
         if rows is not None:
             instance.payment_schedule.all().delete()
