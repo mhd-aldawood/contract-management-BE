@@ -1,5 +1,5 @@
-from django.db import models
 
+from django.db import models
 from contract.helper import UploadToPath
 
 
@@ -30,7 +30,6 @@ class NafathCenterAgreement(models.Model):
         max_length=16, choices=PAYMENT_METHOD_CHOICES, blank=True, default=''
     )
     payment_text = models.TextField(blank=True, default='')
-    payment_schedule = models.JSONField(default=list, blank=True)
 
     # Status / meta
     status = models.CharField(max_length=255, blank=True, default='')
@@ -40,7 +39,6 @@ class NafathCenterAgreement(models.Model):
     )
     is_hidden = models.BooleanField(default=False)
 
-    # File — now with dynamic dirname
     file = models.FileField(
         upload_to=UploadToPath('nafath/files'),
         null=True,
@@ -56,3 +54,21 @@ class NafathCenterAgreement(models.Model):
 
     def __str__(self):
         return f'{self.agreement_number} — {self.name}'
+
+
+class PaymentScheduleRow(models.Model):
+    agreement = models.ForeignKey(
+        NafathCenterAgreement,
+        related_name='payment_schedule',      # keeps API name `payment_schedule`
+        on_delete=models.CASCADE,
+    )
+    label = models.CharField(max_length=250, blank=True, default='')
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    due_date = models.DateField()
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f'{self.agreement_id} — {self.amount} @ {self.due_date}'

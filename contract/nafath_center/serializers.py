@@ -1,103 +1,117 @@
+import json
+
 from rest_framework import serializers
-from .models import NafathCenterAgreement
+from .models import NafathCenterAgreement, PaymentScheduleRow
 
 
-class PaymentScheduleItemSerializer(serializers.Serializer):
-    label = serializers.CharField(allow_blank=True, required=False, default='')
-    amount = serializers.DecimalField(max_digits=14, decimal_places=2, default=0)
-    dueDate = serializers.DateField(required=False, allow_null=True, default=None)
+class PaymentScheduleRowSerializer(serializers.ModelSerializer):
+    dueDate = serializers.DateField(
+        source='due_date', required=False, allow_null=True
+    )
+
+    class Meta:
+        model = PaymentScheduleRow
+        # NOTE: field names here = wire names (camelCase)
+        fields = ['id', 'label', 'amount', 'dueDate', 'order']
+        read_only_fields = ['id']
+
+    def validate_amount(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError('المبلغ يجب أن يكون أكبر من صفر')
+        return value
 
 
 class NafathCenterAgreementSerializer(serializers.ModelSerializer):
-    # Accept camelCase from frontend, map to snake_case model fields.
-    agreementNumber = serializers.CharField(source='agreement_number')
-    companyName = serializers.CharField(source='company_name')
-    estimatedCost = serializers.DecimalField(
-        source='estimated_cost', max_digits=14, decimal_places=2, required=False, default=0
+    # ---- nested rows: wire key "paymentSchedule" → model attr "payment_schedule"
+    payment_schedule  = PaymentScheduleRowSerializer(
+        many=True,
+        required=False,
+        allow_null=True,
     )
-    startDate = serializers.DateField(
-        source='start_date', required=False, allow_null=True
-    )
-    endDate = serializers.DateField(
-        source='end_date', required=False, allow_null=True
-    )
-    paymentMethod = serializers.CharField(
-        source='payment_method', required=False, allow_blank=True
-    )
-    paymentText = serializers.CharField(
-        source='payment_text', required=False, allow_blank=True
-    )
-    paymentSchedule = PaymentScheduleItemSerializer(
-        source='payment_schedule', many=True, required=False
-    )
-    budgetType = serializers.CharField(
-        source='budget_type', required=False, allow_blank=True
-    )
-    isHidden = serializers.BooleanField(source='is_hidden', required=False, default=False)
-    fileName = serializers.CharField(
-        source='file_name', required=False, allow_blank=True
-    )
-    file = serializers.FileField(required=False, allow_null=True)
+
+    # ---- camelCase wire names → snake_case model attrs
+    agreementNumber   = serializers.CharField(source='agreement_number',   required=False, allow_blank=True)
+    companyName       = serializers.CharField(source='company_name',       required=False, allow_blank=True)
+    estimatedCost     = serializers.DecimalField(source='estimated_cost', max_digits=14, decimal_places=2, required=False)
+    startDate         = serializers.DateField(source='start_date',   required=False, allow_null=True)
+    endDate           = serializers.DateField(source='end_date',     required=False, allow_null=True)
+    paymentMethod     = serializers.CharField(source='payment_method', required=False, allow_blank=True)
+    paymentText       = serializers.CharField(source='payment_text',   required=False, allow_blank=True)
+    budgetType        = serializers.CharField(source='budget_type',    required=False, allow_blank=True)
+    isHidden          = serializers.BooleanField(source='is_hidden',   required=False)
+    fileName          = serializers.CharField(source='file_name',      required=False, allow_blank=True)
 
     class Meta:
         model = NafathCenterAgreement
+        # list every wire field you want exposed
         fields = [
-            'id',
-            'type',
-            'agreementNumber',
-            'name',
-            'companyName',
-            'subject',
-            'estimatedCost',
-            'startDate',
-            'endDate',
-            'paymentMethod',
-            'paymentText',
-            'paymentSchedule',
-            'status',
-            'disbursement',
-            'budgetType',
-            'isHidden',
-            'fileName',
-            'file',
-            'created_at',
-            'updated_at',
+            'id', 'type', 'agreementNumber', 'name', 'companyName', 'subject',
+             'estimatedCost', 'startDate', 'endDate',
+            'paymentMethod', 'paymentText', 'payment_schedule',
+            'status', 'disbursement', 'budgetType',
+            'isHidden', 'fileName', 'file',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id']
 
-    # ---------- paymentSchedule normalisation ----------
+    # ------------------------------------------------------------------
+    # Handle BOTH JSON and multipart/form-data clients
+    # ------------------------------------------------------------------
     def to_internal_value(self, data):
-        """
-        Accept `paymentSchedule` either as:
-          - a real JSON array (application/json), OR
-          - a JSON-encoded string (multipart/FormData).
-        """
-        # Work on a mutable copy because QueryDict is immutable.
+        print('>>> to_internal_value CALLED, type:', type(data))
+        print('>>> raw keys:', list(data.keys()) if hasattr(data, 'keys') else data)
+        # 1. QueryDict (multipart / urlencoded) -> plain dict
         if hasattr(data, 'dict'):
             data = data.dict()
+        print('>>> after .dict():', data)
 
-        raw = data.get('paymentSchedule')
-        if isinstance(raw, str) and raw.strip():
-            import json
+        # 2. Remap camelCase wire key -> snake_case serializer field
+        if 'paymentSchedule' in data:
+            data['payment_schedule'] = data.pop('paymentSchedule')
+            print('>>> remapped paymentSchedule -> payment_schedule')
+        else:
+            print('>>> NO paymentSchedule KEY FOUND')
+
+        # 3. If the client sent the list as a JSON string, decode it
+        raw = data.get('payment_schedule')
+        if isinstance(raw, str):
             try:
-                data['paymentSchedule'] = json.loads(raw)
-            except json.JSONDecodeError:
-                raise serializers.ValidationError({
-                    'paymentSchedule': 'Invalid JSON string.'
-                })
-        elif raw in ('', None):
-            data.pop('paymentSchedule', None)
+                data['payment_schedule'] = json.loads(raw)
+                print('>>> decoded JSON string ->', data['payment_schedule'])
+            except Exception as e:
+                print('>>> json.loads failed:', e)
+
+        # 4. Boolean-ish string coercion for multipart ("true"/"false")
+        if isinstance(data.get('isHidden'), str):
+            data['isHidden'] = data['isHidden'].lower() in ('1', 'true', 'yes', 'on')
 
         return super().to_internal_value(data)
 
-    # ---------- output shape (camelCase) ----------
-    def to_representation(self, instance):
-        rep = super().to_representation(instance)
-        # Rename `file` URL if any
-        if instance.file:
-            request = self.context.get('request')
-            url = instance.file.url
-            rep['fileUrl'] = request.build_absolute_uri(url) if request else url
-        else:
-            rep['fileUrl'] = None
-        return rep
+    def create(self, validated_data):
+        print('VALIDATED KEYS:', list(validated_data.keys()))  # ← add this
+        print('ROWS RECEIVED:', validated_data.get('payment_schedule'))
+
+        rows = validated_data.pop('payment_schedule', None) or []
+        agreement = NafathCenterAgreement.objects.create(**validated_data)
+        self._save_rows(agreement, rows)
+        return agreement
+
+    def update(self, instance, validated_data):
+        rows = validated_data.pop('payment_schedule', None)
+        instance = super().update(instance, validated_data)
+        if rows is not None:
+            instance.payment_schedule.all().delete()
+            self._save_rows(instance, rows)
+        return instance
+
+    @staticmethod
+    def _save_rows(agreement, rows):
+        PaymentScheduleRow.objects.bulk_create([
+            PaymentScheduleRow(
+                agreement=agreement,
+                label=row.get('label') or '',
+                amount=row['amount'],
+                due_date=row.get('due_date'),
+                order=i,
+            )
+            for i, row in enumerate(rows)
+        ])
