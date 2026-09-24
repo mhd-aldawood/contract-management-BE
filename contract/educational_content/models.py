@@ -4,16 +4,7 @@ import os
 from django.db import models
 from django.utils import timezone
 
-
-def upload_to_path(instance, filename):
-    """
-    Store files under media/educational_contents/<year>/<month>/<uuid>.<ext>
-    and keep the original filename on the instance.
-    """
-    ext = os.path.splitext(filename)[1].lower()
-    new_name = f"{uuid.uuid4().hex}{ext}"
-    now = timezone.now()
-    return f"educational_contents/{now.year}/{now.month:02d}/{new_name}"
+from contract.helper import UploadToPath
 
 
 class EducationalContent(models.Model):
@@ -43,7 +34,7 @@ class EducationalContent(models.Model):
     is_hidden = models.BooleanField(default=False)
 
     # ---- file storage ----
-    file = models.FileField(upload_to=upload_to_path, null=True, blank=True)
+    file = models.FileField(upload_to=UploadToPath('educational_contents'), null=True, blank=True)
     original_name = models.CharField(max_length=255, blank=True, default="")  # user's original filename
     stored_name = models.CharField(max_length=255, blank=True, default="")    # uuid filename on disk
 

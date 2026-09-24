@@ -22,4 +22,5 @@ urlpatterns = [
     path('api/auth/', include('contract.urls')),
     # Educational content — separate prefix
     path('api/', include('contract.educational_content.urls')),
+    path('api/', include('contract.nafath_center.urls')),
 ]

@@ -33,7 +33,7 @@ class Migration(migrations.Migration):
                 ('budget_type', models.CharField(choices=[('current', 'Current'), ('investment', 'Investment')], default='current', max_length=16)),
                 ('contract_text', models.TextField(blank=True, default='')),
                 ('is_hidden', models.BooleanField(default=False)),
-                ('file', models.FileField(blank=True, null=True, upload_to=contract.educational_content.models.upload_to_path)),
+                ('file', models.FileField(blank=True, null=True, upload_to=contract.educational_content.models.UploadToPath)),
                 ('original_name', models.CharField(blank=True, default='', max_length=255)),
                 ('stored_name', models.CharField(blank=True, default='', max_length=255)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
