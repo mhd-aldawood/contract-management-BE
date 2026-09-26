@@ -23,4 +23,5 @@ urlpatterns = [
     # Educational content — separate prefix
     path('api/', include('contract.educational_content.urls')),
     path('api/', include('contract.nafath_center.urls')),
+    path('api/', include('contract.life_long.urls')),
 ]

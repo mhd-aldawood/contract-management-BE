@@ -23,3 +23,18 @@ def create_profile_and_token(sender, instance, created, **kwargs):
     if created:
         Profile.objects.create(user=instance)
         Token.objects.get_or_create(user=instance)
+
+
+
+class PaymentScheduleRowBase(models.Model):
+    label = models.CharField(max_length=250, blank=True, default='')
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    due_date = models.DateField()
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        abstract = True
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f'{self.pk} — {self.amount} @ {self.due_date}'
